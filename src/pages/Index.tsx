@@ -1,49 +1,65 @@
 import { useState, useMemo } from "react";
 import JamaicaMap from "@/components/JamaicaMap";
 import FlightLog from "@/components/FlightLog";
-import { mockFlights, airports } from "@/data/flights";
+import { airports } from "@/data/flights";
+import { useFlightSimulation } from "@/hooks/useFlightSimulation";
 import { Plane, ArrowDownLeft, ArrowUpRight, Clock } from "lucide-react";
 
 const Index = () => {
   const [selectedAirport, setSelectedAirport] = useState<string | null>(null);
+  const { flights, lastUpdated, changedIds, isLive } = useFlightSimulation(20000);
 
   const flightCounts = useMemo(() => {
     const counts: Record<string, number> = {};
     airports.forEach(a => {
-      counts[a.code] = mockFlights.filter(f => f.airport === a.code).length;
+      counts[a.code] = flights.filter(f => f.airport === a.code).length;
     });
     return counts;
-  }, []);
+  }, [flights]);
 
   const stats = useMemo(() => {
     const relevant = selectedAirport
-      ? mockFlights.filter(f => f.airport === selectedAirport)
-      : mockFlights;
+      ? flights.filter(f => f.airport === selectedAirport)
+      : flights;
     return {
       total: relevant.length,
       inbound: relevant.filter(f => f.direction === 'inbound').length,
       outbound: relevant.filter(f => f.direction === 'outbound').length,
       onTime: relevant.filter(f => f.status === 'on-time' || f.status === 'arrived').length,
     };
-  }, [selectedAirport]);
+  }, [selectedAirport, flights]);
+
+  const secondsAgo = Math.floor((Date.now() - lastUpdated.getTime()) / 1000);
 
   return (
     <div className="min-h-screen bg-background">
       {/* Hero */}
       <section className="bg-primary pt-8 pb-12 px-4">
         <div className="container">
-          <div className="mb-6">
-            <h1 className="font-display text-2xl md:text-3xl font-bold text-primary-foreground mb-1">
-              Jamaica Flight Tracker
-            </h1>
-            <p className="text-primary-foreground/60 text-sm">
-              Real-time monitoring across all major Jamaican airports
-            </p>
+          <div className="mb-6 flex items-start justify-between">
+            <div>
+              <h1 className="font-display text-2xl md:text-3xl font-bold text-primary-foreground mb-1">
+                Jamaica Flight Tracker
+              </h1>
+              <p className="text-primary-foreground/60 text-sm">
+                Real-time monitoring across all major Jamaican airports
+              </p>
+            </div>
+            {isLive && (
+              <div className="flex items-center gap-2 bg-success/15 border border-success/30 px-3 py-1.5 rounded-full">
+                <span className="relative flex h-2.5 w-2.5">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-success opacity-75" />
+                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-success" />
+                </span>
+                <span className="text-xs font-medium text-success">LIVE</span>
+              </div>
+            )}
           </div>
           <JamaicaMap
             selectedAirport={selectedAirport}
             onSelectAirport={setSelectedAirport}
             flightCounts={flightCounts}
+            flights={flights}
           />
         </div>
       </section>
@@ -97,7 +113,7 @@ const Index = () => {
 
       {/* Flight Log */}
       <section className="container px-4 pb-12">
-        <FlightLog flights={mockFlights} selectedAirport={selectedAirport} />
+        <FlightLog flights={flights} selectedAirport={selectedAirport} changedIds={changedIds} />
       </section>
     </div>
   );
