@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { Plane, ArrowDownLeft, ArrowUpRight, Search, Filter } from "lucide-react";
+import { Plane, ArrowDownLeft, ArrowUpRight, Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { type Flight, airports } from "@/data/flights";
@@ -8,6 +8,7 @@ import { motion, AnimatePresence } from "framer-motion";
 interface FlightLogProps {
   flights: Flight[];
   selectedAirport: string | null;
+  changedIds?: Set<string>;
 }
 
 const statusConfig: Record<Flight['status'], { label: string; className: string }> = {
@@ -19,7 +20,7 @@ const statusConfig: Record<Flight['status'], { label: string; className: string 
   'cancelled': { label: 'Cancelled', className: 'bg-destructive/15 text-destructive border-destructive/30' },
 };
 
-const FlightLog = ({ flights, selectedAirport }: FlightLogProps) => {
+const FlightLog = ({ flights, selectedAirport, changedIds = new Set() }: FlightLogProps) => {
   const [search, setSearch] = useState("");
   const [directionFilter, setDirectionFilter] = useState<'all' | 'inbound' | 'outbound'>('all');
 
@@ -81,6 +82,7 @@ const FlightLog = ({ flights, selectedAirport }: FlightLogProps) => {
         <AnimatePresence mode="popLayout">
           {filtered.map((flight) => {
             const status = statusConfig[flight.status];
+            const isChanged = changedIds.has(flight.id);
             return (
               <motion.div
                 key={flight.id}
@@ -89,7 +91,9 @@ const FlightLog = ({ flights, selectedAirport }: FlightLogProps) => {
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -10 }}
                 transition={{ duration: 0.2 }}
-                className="p-4 hover:bg-secondary/50 transition-colors"
+                className={`p-4 hover:bg-secondary/50 transition-all duration-500 ${
+                  isChanged ? 'status-flash' : ''
+                }`}
               >
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex items-start gap-3 min-w-0">
@@ -103,6 +107,11 @@ const FlightLog = ({ flights, selectedAirport }: FlightLogProps) => {
                       <div className="flex items-center gap-2 mb-0.5">
                         <span className="font-display font-semibold text-card-foreground">{flight.flightNumber}</span>
                         <span className="text-xs text-muted-foreground">{flight.airline}</span>
+                        {isChanged && (
+                          <span className="text-[10px] font-medium text-accent bg-accent/15 px-1.5 py-0.5 rounded-full animate-fade-in">
+                            Updated
+                          </span>
+                        )}
                       </div>
                       <p className="text-sm font-medium text-card-foreground truncate">{flight.planeName}</p>
                       <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
