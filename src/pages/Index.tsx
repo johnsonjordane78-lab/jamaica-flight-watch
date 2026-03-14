@@ -2,7 +2,7 @@ import { useState, useMemo } from "react";
 import JamaicaMap from "@/components/JamaicaMap";
 import FlightLog from "@/components/FlightLog";
 import { airports } from "@/data/flights";
-import { useFlightSimulation } from "@/hooks/useFlightSimulation";
+import { useFlights } from "@/hooks/useFlights";
 import { Plane, ArrowDownLeft, ArrowUpRight, Clock } from "lucide-react";
 
 const Index = () => {
