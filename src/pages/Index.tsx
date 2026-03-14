@@ -1,21 +1,14 @@
 import { useState, useMemo } from "react";
-import JamaicaMap from "@/components/JamaicaMap";
+import Jamaica3DScene from "@/components/3d/Jamaica3DScene";
 import FlightLog from "@/components/FlightLog";
 import { airports } from "@/data/flights";
 import { useFlights } from "@/hooks/useFlights";
 import { Plane, ArrowDownLeft, ArrowUpRight, Clock } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
 
 const Index = () => {
   const [selectedAirport, setSelectedAirport] = useState<string | null>(null);
   const { flights, lastUpdated, changedIds, isLive, isLoading } = useFlights(60000);
-
-  const flightCounts = useMemo(() => {
-    const counts: Record<string, number> = {};
-    airports.forEach(a => {
-      counts[a.code] = flights.filter(f => f.airport === a.code).length;
-    });
-    return counts;
-  }, [flights]);
 
   const stats = useMemo(() => {
     const relevant = selectedAirport
@@ -29,20 +22,18 @@ const Index = () => {
     };
   }, [selectedAirport, flights]);
 
-  const secondsAgo = Math.floor((Date.now() - lastUpdated.getTime()) / 1000);
-
   return (
     <div className="min-h-screen bg-background">
-      {/* Hero */}
-      <section className="bg-primary pt-8 pb-12 px-4">
+      {/* Hero - 3D Scene */}
+      <section className="bg-primary pt-6 pb-10 px-4">
         <div className="container">
-          <div className="mb-6 flex items-start justify-between">
+          <div className="mb-4 flex items-start justify-between">
             <div>
               <h1 className="font-display text-2xl md:text-3xl font-bold text-primary-foreground mb-1">
                 Jamaica Flight Tracker
               </h1>
               <p className="text-primary-foreground/60 text-sm">
-                Real-time monitoring across all major Jamaican airports
+                Real-time 3D monitoring across all major Jamaican airports
               </p>
             </div>
             {isLive && (
@@ -55,12 +46,17 @@ const Index = () => {
               </div>
             )}
           </div>
-          <JamaicaMap
-            selectedAirport={selectedAirport}
-            onSelectAirport={setSelectedAirport}
-            flightCounts={flightCounts}
-            flights={flights}
-          />
+
+          {isLoading ? (
+            <Skeleton className="w-full aspect-[2/1] rounded-lg" />
+          ) : (
+            <Jamaica3DScene
+              flights={flights}
+              selectedAirport={selectedAirport}
+              onSelectAirport={setSelectedAirport}
+              isLive={isLive}
+            />
+          )}
         </div>
       </section>
 
