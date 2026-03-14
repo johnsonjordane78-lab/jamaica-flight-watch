@@ -7,7 +7,7 @@ import { Plane, ArrowDownLeft, ArrowUpRight, Clock } from "lucide-react";
 
 const Index = () => {
   const [selectedAirport, setSelectedAirport] = useState<string | null>(null);
-  const { flights, lastUpdated, changedIds, isLive } = useFlightSimulation(20000);
+  const { flights, lastUpdated, changedIds, isLive, isLoading } = useFlights(60000);
 
   const flightCounts = useMemo(() => {
     const counts: Record<string, number> = {};
