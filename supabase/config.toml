@@ -1,1 +1,4 @@
 project_id = "onyevoksqyvitbngfejn"
+
+[functions.fetch-flights]
+verify_jwt = false
