@@ -54,13 +54,66 @@ Deno.serve(async (req) => {
   }
 
   try {
+    const supabaseUrl = Deno.env.get('SUPABASE_URL');
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
     const apiKey = Deno.env.get('AVIATIONSTACK_API_KEY');
-    if (!apiKey) {
-      return new Response(JSON.stringify({ error: 'API key not configured' }), {
+
+    if (!supabaseUrl || !supabaseServiceKey || !apiKey) {
+      return new Response(JSON.stringify({ error: 'Missing environment variables' }), {
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
+
+    const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2');
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+    // 1. Check Cache
+    // We consider cache valid if it was updated in the last 5 minutes (300 seconds)
+    const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+
+    const { data: cachedFlights, error: cacheError } = await supabase
+      .from('flights_cache')
+      .select('*')
+      .gt('last_updated', fiveMinutesAgo);
+
+    if (cacheError) {
+      console.error('Error fetching from cache:', cacheError);
+    }
+
+    // 2. If we have recent data (at least 1 entry implies a recent fetch for *someone*),
+    // return it immediately to save API calls.
+    // Note: If you want to ensure we have data for ALL airports, we might want to be more specific,
+    // but globally if this table was updated < 5 mins ago, it's fresh.
+    if (cachedFlights && cachedFlights.length > 0) {
+      console.log('Returning cached flight data');
+      
+      // Map snaked_case back to camelCase for the frontend
+      const flightsToReturn = cachedFlights.map(f => ({
+        id: f.id,
+        flightNumber: f.flight_number,
+        airline: f.airline,
+        planeName: f.plane_name,
+        modelNumber: f.model_number,
+        origin: f.origin,
+        destination: f.destination,
+        airport: f.airport,
+        direction: f.direction,
+        status: f.status,
+        scheduledTime: f.scheduled_time,
+        gate: f.gate
+      }));
+
+      return new Response(JSON.stringify({ flights: flightsToReturn, timestamp: cachedFlights[0].last_updated }), {
+        headers: {
+          ...corsHeaders,
+          'Content-Type': 'application/json',
+          'Cache-Control': 'public, max-age=300',
+        },
+      });
+    }
+
+    console.log('Cache missed or data stale. Fetching fresh from Aviationstack...');
 
     const allFlights: NormalizedFlight[] = [];
     const seen = new Set<string>();
@@ -131,6 +184,38 @@ Deno.serve(async (req) => {
       } catch (e) {
         console.error(`Error fetching departures for ${iata}:`, e);
       }
+    }
+
+    // 4. Upsert fresh data into the cache
+    if (allFlights.length > 0) {
+      const flightsToInsert = allFlights.map(f => ({
+        id: f.id,
+        flight_number: f.flightNumber,
+        airline: f.airline,
+        plane_name: f.planeName,
+        model_number: f.modelNumber,
+        origin: f.origin,
+        destination: f.destination,
+        airport: f.airport,
+        direction: f.direction,
+        status: f.status,
+        scheduled_time: f.scheduledTime,
+        gate: f.gate,
+        last_updated: new Date().toISOString()
+      }));
+
+      const { error: upsertError } = await supabase
+        .from('flights_cache')
+        .upsert(flightsToInsert, { onConflict: 'id' });
+
+      if (upsertError) {
+        console.error('Error upserting to cache:', upsertError);
+      }
+      
+      // Fire-and-forget cleanup of old flights (> 24h)
+      supabase.rpc('delete_old_flights', { cache_duration_hours: 24 }).then(({ error }) => {
+        if (error) console.error('Error deleting old flights:', error);
+      });
     }
 
     return new Response(JSON.stringify({ flights: allFlights, timestamp: new Date().toISOString() }), {

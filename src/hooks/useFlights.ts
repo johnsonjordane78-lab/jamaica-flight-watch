@@ -19,18 +19,18 @@ export function useFlights(refreshIntervalMs = 60000) {
       if (!data?.flights?.length) throw new Error('No flight data returned');
 
       const newFlights: Flight[] = data.flights.map((f: any) => ({
-        id: f.id,
-        flightNumber: f.flightNumber,
-        airline: f.airline,
-        planeName: f.planeName,
-        modelNumber: f.modelNumber,
-        origin: f.origin,
-        destination: f.destination,
+        id: f.id || String(Math.random()),
+        flightNumber: f.flightNumber || 'Unknown',
+        airline: f.airline || 'Unknown Airline',
+        planeName: f.planeName || 'Commercial Flight',
+        modelNumber: f.modelNumber || 'Unknown Aircraft',
+        origin: f.origin || 'Unknown',
+        destination: f.destination || 'Unknown',
         airport: f.airport as Flight['airport'],
         direction: f.direction as Flight['direction'],
-        status: f.status as Flight['status'],
-        scheduledTime: f.scheduledTime,
-        gate: f.gate,
+        status: f.status as Flight['status'] || 'on-time',
+        scheduledTime: f.scheduledTime || '--:--',
+        gate: f.gate || undefined,
       }));
 
       // Track changes
@@ -58,10 +58,12 @@ export function useFlights(refreshIntervalMs = 60000) {
         setTimeout(() => setChangedIds(new Set()), 2500);
       }
     } catch (err: any) {
-      console.error('Failed to fetch live flights:', err);
+      console.warn('Failed to fetch live flights, falling back to mock data:', err);
+      // Fallback to mock data so the UI doesn't break
+      setFlights([...mockFlights]);
+      // We still set error, but the app continues working with mock data
       setError(err.message);
       setIsLive(false);
-      // Keep existing flights (mock or last successful fetch)
     } finally {
       setIsLoading(false);
     }

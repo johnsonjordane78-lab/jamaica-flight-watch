@@ -4,7 +4,9 @@ import { Suspense, useState, useCallback } from "react";
 import IslandMesh from "./IslandMesh";
 import RunwayMesh from "./RunwayMesh";
 import AirportMarker3D from "./AirportMarker3D";
+import { Flight3D } from "./Flight3D";
 import { type Flight } from "@/data/flights";
+import { useFlightStore } from "@/store/useFlightStore";
 
 // Real-world coordinates converted to scene space
 // Jamaica spans roughly 17.7°N–18.5°N, 78.4°W–76.2°W
@@ -51,17 +53,16 @@ const AIRPORTS_3D = [
 
 interface Jamaica3DSceneProps {
   flights: Flight[];
-  selectedAirport: string | null;
-  onSelectAirport: (code: string | null) => void;
   isLive: boolean;
 }
 
-const Jamaica3DScene = ({ flights, selectedAirport, onSelectAirport, isLive }: Jamaica3DSceneProps) => {
+const Jamaica3DScene = ({ flights, isLive }: Jamaica3DSceneProps) => {
   const [hovered, setHovered] = useState<string | null>(null);
+  const { selectedAirport, setAirport } = useFlightStore();
 
   const handleAirportClick = useCallback((code: string) => {
-    onSelectAirport(selectedAirport === code ? null : code);
-  }, [selectedAirport, onSelectAirport]);
+    setAirport(selectedAirport === code ? null : code);
+  }, [selectedAirport, setAirport]);
 
   return (
     <div className="relative w-full aspect-[2/1] rounded-lg overflow-hidden bg-[hsl(210,70%,8%)]">
@@ -134,6 +135,16 @@ const Jamaica3DScene = ({ flights, selectedAirport, onSelectAirport, isLive }: J
               </group>
             );
           })}
+
+          {/* Render Active Flights */}
+          {flights.map(flight => (
+             <Flight3D 
+                key={flight.id} 
+                flight={flight} 
+                // We'd ideally highlight the flight if it was selected in global state
+                isSelected={false} 
+             />
+          ))}
         </Suspense>
       </Canvas>
 

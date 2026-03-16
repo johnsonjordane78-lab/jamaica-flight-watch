@@ -4,10 +4,10 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { type Flight, airports } from "@/data/flights";
 import { motion, AnimatePresence } from "framer-motion";
+import { useFlightStore } from "@/store/useFlightStore";
 
 interface FlightLogProps {
   flights: Flight[];
-  selectedAirport: string | null;
   changedIds?: Set<string>;
 }
 
@@ -20,7 +20,8 @@ const statusConfig: Record<Flight['status'], { label: string; className: string 
   'cancelled': { label: 'Cancelled', className: 'bg-destructive/15 text-destructive border-destructive/30' },
 };
 
-const FlightLog = ({ flights, selectedAirport, changedIds = new Set() }: FlightLogProps) => {
+const FlightLog = ({ flights, changedIds = new Set() }: FlightLogProps) => {
+  const { selectedAirport } = useFlightStore();
   const [search, setSearch] = useState("");
   const [directionFilter, setDirectionFilter] = useState<'all' | 'inbound' | 'outbound'>('all');
 

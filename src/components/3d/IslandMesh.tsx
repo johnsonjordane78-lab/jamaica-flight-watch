@@ -1,29 +1,11 @@
-import { useMemo } from "react";
+import { useEffect, useState, useMemo } from "react";
 import * as THREE from "three";
+import { Airport3D } from "./Airport3D";
+import { createJamaicaDEMTexture } from "@/utils/generateHeightmap";
 
-// Simplified Jamaica outline as lat/lon points, converted to local scene coords
-// Jamaica center: 18.15°N, 77.35°W, scale: 9 units/degree
+// Same projection logic used historically
 const SCALE = 9;
 const CENTER = { lat: 18.15, lon: -77.35 };
-
-// Jamaica coastline outline (simplified polygon)
-const JAMAICA_OUTLINE: [number, number][] = [
-  // West coast (Negril area)
-  [-78.37, 18.20], [-78.34, 18.25], [-78.30, 18.30], [-78.22, 18.35],
-  // North coast (Montego Bay → Ocho Rios → Port Antonio)
-  [-78.00, 18.45], [-77.90, 18.50], [-77.80, 18.47], [-77.60, 18.47],
-  [-77.40, 18.47], [-77.20, 18.45], [-77.00, 18.45], [-76.80, 18.40],
-  [-76.60, 18.38], [-76.40, 18.35], [-76.20, 18.28], [-76.18, 18.22],
-  // East coast (Morant Point)
-  [-76.18, 18.15], [-76.20, 18.05], [-76.25, 17.95],
-  // South coast (Kingston → Black River)
-  [-76.40, 17.85], [-76.60, 17.82], [-76.80, 17.85], [-76.90, 17.88],
-  [-77.00, 17.85], [-77.10, 17.83], [-77.30, 17.80], [-77.50, 17.82],
-  [-77.70, 17.85], [-77.85, 17.90], [-78.00, 17.95], [-78.10, 18.00],
-  [-78.20, 18.05], [-78.30, 18.10], [-78.35, 18.15],
-  // Close
-  [-78.37, 18.20],
-];
 
 function toScene(lon: number, lat: number): [number, number] {
   return [
@@ -32,66 +14,88 @@ function toScene(lon: number, lat: number): [number, number] {
   ];
 }
 
+interface GeoFeature {
+  type: string;
+  geometry: { type: string; coordinates: [number, number][] };
+}
+
 const IslandMesh = () => {
-  const geometry = useMemo(() => {
-    const shape = new THREE.Shape();
-    const points = JAMAICA_OUTLINE.map(([lon, lat]) => toScene(lon, lat));
+  const [coastlineGeometry, setCoastlineGeometry] = useState<THREE.BufferGeometry | null>(null);
+  
+  // Memoize the procedural DEM texture so it's not regenerated on every render
+  const demTexture = useMemo(() => createJamaicaDEMTexture(256, 128), []);
 
-    shape.moveTo(points[0][0], points[0][1]);
-    for (let i = 1; i < points.length; i++) {
-      shape.lineTo(points[i][0], points[i][1]);
-    }
-    shape.closePath();
+  useEffect(() => {
+    fetch("/jamaica-coastline.geojson")
+      .then((res) => res.json())
+      .then((data) => {
+        const features: GeoFeature[] = data.features || [];
+        
+        // Since OSM geometry is highly fragmented strings that fail Three.js triangulation
+        // (ExtrudeGeometry requires mathematically perfect closed polygons), 
+        // we will render the raw GeoJSON segments directly as a high-density Line curve.
+        
+        const vertices: number[] = [];
+        
+        features.forEach((feature) => {
+          const coords = feature.geometry.coordinates;
+          // Add line segments. To build a Three.js Line, we can just push the connected points.
+          for (let i = 0; i < coords.length; i++) {
+             const [x, z] = toScene(coords[i][0], coords[i][1]);
+             vertices.push(x, 0, z); // y is 0 (flat ocean level)
+          }
+           // Insert a NaN gap between distinct LineStrings to prevent Three.js from 
+           // drawing a line connecting the end of one segment to the start of another far away
+           vertices.push(NaN, NaN, NaN);
+        });
 
-    const extrudeSettings = {
-      depth: 0.15,
-      bevelEnabled: true,
-      bevelThickness: 0.02,
-      bevelSize: 0.03,
-      bevelSegments: 3,
-    };
+        const geo = new THREE.BufferGeometry();
+        // Float32Array doesn't like NaN for defining separate lines easily in a single Line loop,
+        // so we'll use a LineSegments approach. We pair each point with its next point.
+        
+        const segmentVertices: number[] = [];
+        features.forEach((feature) => {
+          const coords = feature.geometry.coordinates;
+          for (let i = 0; i < coords.length - 1; i++) {
+             const [x1, z1] = toScene(coords[i][0], coords[i][1]);
+             const [x2, z2] = toScene(coords[i + 1][0], coords[i + 1][1]);
+             segmentVertices.push(x1, 0, z1);
+             segmentVertices.push(x2, 0, z2);
+          }
+        });
 
-    return new THREE.ExtrudeGeometry(shape, extrudeSettings);
+        geo.setAttribute('position', new THREE.Float32BufferAttribute(segmentVertices, 3));
+        setCoastlineGeometry(geo);
+      })
+      .catch((err) => console.error("Failed to load GeoJSON for 3D:", err));
   }, []);
 
   return (
     <group>
-      {/* Main island body */}
-      <mesh
-        geometry={geometry}
-        rotation={[-Math.PI / 2, 0, 0]}
-        position={[0, 0, 0]}
-        castShadow
-        receiveShadow
-      >
-        <meshStandardMaterial
-          color="#1a5c3a"
-          roughness={0.8}
-          metalness={0.1}
-        />
+      {/* High-detail Coastlines (Rendered as glowing Lines) */}
+      {coastlineGeometry && (
+        <lineSegments geometry={coastlineGeometry}>
+          <lineBasicMaterial color="#4da6ff" linewidth={2} transparent opacity={0.6} />
+        </lineSegments>
+      )}
+
+      {/* Detailed Island Plane w/ Displacement Map */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.01, 0]}>
+         <planeGeometry args={[25, 10, 200, 80]} />
+         <meshStandardMaterial 
+            color="#05101a" 
+            transparent 
+            opacity={0.8}
+            displacementMap={demTexture}
+            displacementScale={1.5}
+            roughness={0.9}
+         />
       </mesh>
 
-      {/* Mountain ridge highlight */}
-      <mesh
-        rotation={[-Math.PI / 2, 0, 0]}
-        position={[0, 0.16, 0]}
-      >
-        <mesh>
-          {/* Blue Mountains area - elevated bump */}
-          <sphereGeometry args={[0.8, 16, 16, 0, Math.PI * 2, 0, Math.PI / 2]} />
-          <meshStandardMaterial color="#2d7a4f" roughness={0.9} transparent opacity={0.7} />
-        </mesh>
-      </mesh>
-      {/* Blue Mountains peak */}
-      <mesh position={[((-76.58) - CENTER.lon) * SCALE, 0.35, -(18.18 - CENTER.lat) * SCALE]}>
-        <coneGeometry args={[0.6, 0.4, 8]} />
-        <meshStandardMaterial color="#2d7a4f" roughness={0.85} />
-      </mesh>
-      {/* Central highlands */}
-      <mesh position={[((-77.5) - CENTER.lon) * SCALE, 0.25, -(18.2 - CENTER.lat) * SCALE]}>
-        <coneGeometry args={[1.2, 0.3, 8]} />
-        <meshStandardMaterial color="#246b3e" roughness={0.85} />
-      </mesh>
+      {/* 3D Airports parsed from OpenStreetMap */}
+      <Airport3D iataCode="MBJ" fileName="/mbj_osm.json" />
+      <Airport3D iataCode="KIN" fileName="/kin_osm.json" />
+      <Airport3D iataCode="OCJ" fileName="/ocj_osm.json" />
     </group>
   );
 };

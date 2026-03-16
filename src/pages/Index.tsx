@@ -1,14 +1,25 @@
-import { useState, useMemo } from "react";
+import { useMemo } from "react";
+import { useFlightStore } from "@/store/useFlightStore";
 import Jamaica3DScene from "@/components/3d/Jamaica3DScene";
+import JamaicaMap from "@/components/JamaicaMap";
 import FlightLog from "@/components/FlightLog";
 import { airports } from "@/data/flights";
 import { useFlights } from "@/hooks/useFlights";
-import { Plane, ArrowDownLeft, ArrowUpRight, Clock } from "lucide-react";
+import { Plane, ArrowDownLeft, ArrowUpRight, Clock, Box, Map } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ATCRadio } from "@/components/ATCRadio";
 
 const Index = () => {
-  const [selectedAirport, setSelectedAirport] = useState<string | null>(null);
+  const { selectedAirport, setAirport, viewMode, setViewMode } = useFlightStore();
   const { flights, lastUpdated, changedIds, isLive, isLoading } = useFlights(60000);
+
+  const flightCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    flights.forEach(f => {
+      counts[f.airport] = (counts[f.airport] || 0) + 1;
+    });
+    return counts;
+  }, [flights]);
 
   const stats = useMemo(() => {
     const relevant = selectedAirport
@@ -50,12 +61,24 @@ const Index = () => {
           {isLoading ? (
             <Skeleton className="w-full aspect-[2/1] rounded-lg" />
           ) : (
-            <Jamaica3DScene
-              flights={flights}
-              selectedAirport={selectedAirport}
-              onSelectAirport={setSelectedAirport}
-              isLive={isLive}
-            />
+            <div className="relative w-full">
+              {viewMode === '3d' ? (
+                <Jamaica3DScene
+                  flights={flights}
+                  isLive={isLive}
+                />
+              ) : (
+                <JamaicaMap
+                   flights={flights}
+                   flightCounts={flightCounts}
+                />
+              )}
+              
+              {/* ATC Radio Overlay */}
+              <div className="absolute bottom-4 right-4 z-10 pointer-events-auto">
+                <ATCRadio />
+              </div>
+            </div>
           )}
         </div>
       </section>
@@ -80,36 +103,57 @@ const Index = () => {
         </div>
       </section>
 
-      {/* Airport filter chips */}
+      {/* View Toggle & Airport filter chips */}
       <section className="container px-4 mb-4">
-        <div className="flex items-center gap-2 flex-wrap">
-          <button
-            onClick={() => setSelectedAirport(null)}
-            className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
-              !selectedAirport ? 'bg-primary text-primary-foreground' : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'
-            }`}
-          >
-            All Airports
-          </button>
-          {airports.map((airport) => (
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-2 bg-secondary p-1 rounded-full">
             <button
-              key={airport.code}
-              onClick={() => setSelectedAirport(selectedAirport === airport.code ? null : airport.code)}
-              className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
-                selectedAirport === airport.code
-                  ? 'bg-primary text-primary-foreground'
-                  : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'
+              onClick={() => setViewMode('3d')}
+              className={`flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-semibold transition-all ${
+                viewMode === '3d' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
               }`}
             >
-              {airport.shortName}
+              <Box className="h-3.5 w-3.5" /> 3D View
             </button>
-          ))}
+            <button
+              onClick={() => setViewMode('2d')}
+              className={`flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-semibold transition-all ${
+                viewMode === '2d' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              <Map className="h-3.5 w-3.5" /> 2D Map (GeoJSON)
+            </button>
+          </div>
+
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              onClick={() => setAirport(null)}
+              className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
+                !selectedAirport ? 'bg-primary text-primary-foreground' : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'
+              }`}
+            >
+              All Airports
+            </button>
+            {airports.map((airport) => (
+              <button
+                key={airport.code}
+                onClick={() => setAirport(selectedAirport === airport.code ? null : airport.code)}
+                className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
+                  selectedAirport === airport.code
+                    ? 'bg-primary text-primary-foreground'
+                    : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'
+                }`}
+              >
+                {airport.shortName}
+              </button>
+            ))}
+          </div>
         </div>
       </section>
 
       {/* Flight Log */}
       <section className="container px-4 pb-12">
-        <FlightLog flights={flights} selectedAirport={selectedAirport} changedIds={changedIds} />
+        <FlightLog flights={flights} changedIds={changedIds} />
       </section>
     </div>
   );

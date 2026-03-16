@@ -23,9 +23,9 @@ export interface Airport {
 }
 
 export const airports: Airport[] = [
-  { code: 'MKJS', name: 'Donald Sangster International Airport', shortName: 'Sangster', city: 'Montego Bay', x: 22, y: 35 },
-  { code: 'MKJF', name: 'Ian Fleming International Airport', shortName: 'Ian Fleming', city: 'Ocho Rios', x: 52, y: 28 },
-  { code: 'MKJP', name: 'Norman Manley International Airport', shortName: 'Norman Manley', city: 'Kingston', x: 78, y: 72 },
+  { code: 'MKJS', name: 'Donald Sangster International Airport', shortName: 'Sangster', city: 'Montego Bay', x: 22, y: 26 },
+  { code: 'MKJF', name: 'Ian Fleming International Airport', shortName: 'Ian Fleming', city: 'Ocho Rios', x: 58, y: 35 },
+  { code: 'MKJP', name: 'Norman Manley International Airport', shortName: 'Norman Manley', city: 'Kingston', x: 64, y: 44 },
 ];
 
 export const mockFlights: Flight[] = [
